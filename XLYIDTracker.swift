@@ -31,7 +31,13 @@ import Foundation
         tracker.addTrackingInfo("c", timeOut: 2, queue: queue, handler)
         //or you can create a trackingInfo and then add it
         var trackingInfo = XLYBasicTrackingInfo(trackID: "d", timeOut: 2, queue: queue, handler)
+        trackingInfo.autoRemoveFromTracker = true
         tracker.addTrackingInfo(trackingInfo)
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (Int64)(3 * NSEC_PER_SEC)), dispatch_get_main_queue()) {
+            dispatch_async(self.tracker?.trackerQueue) {
+                let _ = self.tracker?.responseTrackingForID("d", response: "d hello")
+            }
+        }
     }
 */
 
@@ -131,6 +137,7 @@ public protocol XLYTrackingInfo {
 public class XLYBasicTrackingInfo: XLYTrackingInfo {
     public let trackID: String
     public let trackQueue: dispatch_queue_t
+    public var autoRemoveFromTracker = false
     public weak var tracker: XLYIDTracker!
     private let trackTimeOut: NSTimeInterval = 15
     private let trackHandler: XLYTrackingHandler
@@ -159,13 +166,16 @@ public class XLYBasicTrackingInfo: XLYTrackingInfo {
         dispatch_source_set_event_handler(trackTimer) {
             [weak self] in
             autoreleasepool(){
-                if let tracker = self?.tracker {
-                    if let trackID = self?.trackID {
+                if let strongSelf = self {
+                    if let tracker = strongSelf.tracker {
                         dispatch_async(tracker.trackerQueue) {
-                            ///swift的问题，如果只有一个语句则一定返回该语句的执行结果
-                            ///现在这个返回值和要求的Void不符合，所以。。。
-                            doNoting()
-                            tracker.responseTrackingForID(trackID, response: nil)
+                            if strongSelf.autoRemoveFromTracker {
+                                let _ = tracker.responseTrackingForID(strongSelf.trackID, response: nil)
+                            } else {
+                                dispatch_async(strongSelf.trackQueue) {
+                                    strongSelf.response(nil)
+                                }
+                            }
                         }
                     }
                 }
@@ -190,6 +200,3 @@ public class XLYBasicTrackingInfo: XLYTrackingInfo {
         }
     }
 }
-
-//MARK: - a function do noting...
-private func doNoting(){}
